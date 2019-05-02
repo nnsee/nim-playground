@@ -12,7 +12,7 @@ chmod 777 /usercode/errors.txt
 
 nim $compilationTarget /usercode/$file
 if [ $? -eq 0 ];	then
-    ./usercode/${file/.nim/""}
+    /usercode/${file/.nim/""}
 else
-    echo "Compilation Failed"
+    echo ""
 fi

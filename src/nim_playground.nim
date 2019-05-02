@@ -1,9 +1,9 @@
-import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient
+import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams
 
 type
   Config = object
-    tmpDir: string
-    logFile: string
+    tmpDir: ptr string
+    logFile: ptr string
   
   APIToken = object
     gist: string
@@ -16,7 +16,6 @@ type
     tmpDir: string
 
 const configFileName = "conf.json"
-# const apiTokenFileName = "token.json"
 
 onSignal(SIGABRT):
   ## Handle SIGABRT from systemd
@@ -27,14 +26,16 @@ onSignal(SIGABRT):
 
 var conf = createShared(Config)
 let parsedConfig = parseFile(configFileName)
-conf.tmpDir = parsedConfig["tmp_dir"].str
-conf.logFile = parsedConfig["log_fname"].str
+var
+  tmpDir = parsedConfig["tmp_dir"].str
+  logFile = parsedConfig["log_fname"].str
 
-# var apiToken = createShared(APIToken)
-# let parsedAPIToken = parseFile(apiTokenFileName)
-# apiToken.gist = parsedAPIToken["gist"].str
+discard existsOrCreateDir(tmpDir)
 
-let fl = newFileLogger(conf.logFile, fmtStr = "$datetime $levelname ")
+conf.tmpDir = tmpDir.addr
+conf.logFile = logFile.addr
+
+let fl = newFileLogger(conf.logFile[], fmtStr = "$datetime $levelname ")
 fl.addHandler
 
 proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig): Future[string] {.async.} =
@@ -42,8 +43,8 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
     if fv.isReady:
       echo ^fv
       
-      var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmReadWrite)
-      var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmReadWrite)
+      var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
+      var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
       
@@ -51,6 +52,7 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       
       errorsFile.close()
       logFile.close()
+      removeDir(requestConfig.tmpDir)
       freeShared(requestConfig)
       return $ret
       
@@ -66,33 +68,15 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
     ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode virtual_machine /usercode/script.sh in.nim $2
     """ % [requestConfig.tmpDir, compilationTarget]) 
 
-# proc createGist(code: string): string =
-#   let client = newHttpClient()
-  
-#   client.headers = newHttpHeaders([("Content-Type", "application/json" )])
-#   let body = %*{
-#     "description": "Snippet from https://play.nim-lang.org",
-#     "public": true,
-#     "files": {
-#       "playground.nim": {
-#         "content": code
-#       }
-#     }
-#   }
-#   let resp = client.request("https://api.github.com/gists?client_id=887dc07b67acec87e489&client_secret=$1" % apiToken.gist, httpMethod = HttpPost, body = $body)
-  
-#   let parsedResponse = parseJson(resp.bodyStream, "response.json")
-#   return parsedResponse.getOrDefault("html_url").str
+proc createIx(code: string): string =
+  let client = newHttpClient()
+  var data = newMultipartData()
+  data["f:1"] = code
+  client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
 
-# proc loadGist(gistId: string): string =
-#   let client = newHttpClient()
-
-#   client.headers = newHttpHeaders([("Content-Type", "application/json" )])
-
-#   let resp = client.request("https://api.github.com/gists/$1?client_id=887dc07b67acec87e489&client_secret=$2" % [gistId, apiToken.gist], httpMethod = HttpGet)
-  
-#   let parsedResponse = parseJson(resp.bodyStream, "response.json")
-#   return parsedResponse.getOrDefault("files").fields["playground.nim"].fields["content"].str
+proc loadIx(ixid: string): string =
+  let client = newHttpClient()
+  client.request("http://ix.io/$1" % ixid, httpMethod = HttpGet).bodyStream.readAll()
 
 
 proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig): Future[string] =
@@ -100,17 +84,21 @@ proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig):
   return respondOnReady(fv, requestConfig)
 
 routes:
-  # get "/gist/@gistId":
-  #   resp(Http200, loadGist(@"gistId"))
+  get "/":
+    redirect("/index.html")
 
-  # post "/gist":
-  #   var parsedRequest: ParsedRequest
-  #   let parsed = parseJson(request.body)
-  #   if getOrDefault(parsed, "code").isNil:
-  #     resp(Http400)
-  #   parsedRequest = to(parsed, ParsedRequest)
-    
-  #   resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], createGist(parsedRequest.code))
+  get "/ix/@ixid":
+      resp(Http200, loadIx(@"ixid"))
+
+  post "/ix":
+    var parsedRequest: ParsedRequest
+    let parsed = parseJson(request.body)
+    if getOrDefault(parsed, "code").isNil:
+      resp(Http400)
+    parsedRequest = to(parsed, ParsedRequest)
+
+    resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], createix(parsedRequest.code))
+
   post "/compile":
     var parsedRequest: ParsedRequest
 
@@ -128,13 +116,12 @@ routes:
       parsedRequest = to(parsed, ParsedRequest)
 
     let requestConfig = createShared(RequestConfig)
-    requestConfig.tmpDir = conf.tmpDir & "/" & generateUUID()
+    requestConfig.tmpDir = conf.tmpDir[] & "/" & generateUUID()
     let compileResult = await compile(parsedRequest.code, parsedRequest.compilationTarget, requestConfig)
-    
+
     resp(Http200, [("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], compileResult)
-    
+
 
 info "Starting!"
 runForever()
 freeShared(conf)
-# freeShared(apiToken)
