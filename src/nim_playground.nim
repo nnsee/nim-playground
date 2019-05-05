@@ -1,4 +1,4 @@
-import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams
+import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams, uri
 
 type
   Config = object
@@ -71,8 +71,7 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
 proc loadUrl(url: string): string =
   let client = newHttpClient()
   client.onProgressChanged = proc (total, progress, speed: BiggestInt) =
-    if total > 10 or progress > 1048576 or (progress > 4000 and speed < 100):
-    #if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
+    if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
       client.close()
   return client.getContent(url)
 
@@ -95,6 +94,9 @@ proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig):
 routes:
   get "/":
     redirect("/index.html")
+
+  get "/tour/@url":
+      resp(Http200, [("Content-Type","text/plain")], loadUrl(decodeUrl(@"url")))
 
   get "/ix/@ixid":
       resp(Http200, loadIx(@"ixid"))
