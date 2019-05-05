@@ -4,10 +4,10 @@ type
   Config = object
     tmpDir: ptr string
     logFile: ptr string
-  
+
   APIToken = object
     gist: string
-  
+
   ParsedRequest = object
     code: string
     compilationTarget: string
@@ -42,20 +42,20 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
   while true:
     if fv.isReady:
       echo ^fv
-      
+
       var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
       var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
-      
+
       var ret = %* {"compileLog": errors, "log": log}
-      
+
       errorsFile.close()
       logFile.close()
       removeDir(requestConfig.tmpDir)
       freeShared(requestConfig)
       return $ret
-      
+
 
     await sleepAsync(500)
 
@@ -66,7 +66,15 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
 
   execProcess("""
     ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode virtual_machine /usercode/script.sh in.nim $2
-    """ % [requestConfig.tmpDir, compilationTarget]) 
+    """ % [requestConfig.tmpDir, compilationTarget])
+
+proc loadUrl(url: string): string =
+  let client = newHttpClient()
+  client.onProgressChanged = proc (total, progress, speed: BiggestInt) =
+    if total > 10 or progress > 1048576 or (progress > 4000 and speed < 100):
+    #if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
+      client.close()
+  return client.getContent(url)
 
 proc createIx(code: string): string =
   let client = newHttpClient()
@@ -75,9 +83,10 @@ proc createIx(code: string): string =
   client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
 
 proc loadIx(ixid: string): string =
-  let client = newHttpClient()
-  client.request("http://ix.io/$1" % ixid, httpMethod = HttpGet).bodyStream.readAll()
-
+  try:
+    return loadUrl("http://ix.io/$1" % ixid)
+  except:
+    return "Unable to load ix paste, file too large, or download is too slow"
 
 proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig): Future[string] =
   let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig)
