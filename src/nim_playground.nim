@@ -68,12 +68,12 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
     ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode virtual_machine /usercode/script.sh in.nim $2
     """ % [requestConfig.tmpDir, compilationTarget])
 
-proc loadUrl(url: string): string =
-  let client = newHttpClient()
-  client.onProgressChanged = proc (total, progress, speed: BiggestInt) =
+proc loadUrl(url: string): Future[string] {.async.} =
+  let client = newAsyncHttpClient()
+  client.onProgressChanged = proc (total, progress, speed: BiggestInt) {.async.} =
     if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
       client.close()
-  return client.getContent(url)
+  return await client.getContent(url)
 
 proc createIx(code: string): string =
   let client = newHttpClient()
@@ -81,9 +81,9 @@ proc createIx(code: string): string =
   data["f:1"] = code
   client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
 
-proc loadIx(ixid: string): string =
+proc loadIx(ixid: string): Future[string] {.async.} =
   try:
-    return loadUrl("http://ix.io/$1" % ixid)
+    return await loadUrl("http://ix.io/$1" % ixid)
   except:
     return "Unable to load ix paste, file too large, or download is too slow"
 
@@ -96,10 +96,10 @@ routes:
     redirect("/index.html")
 
   get "/tour/@url":
-      resp(Http200, [("Content-Type","text/plain")], loadUrl(decodeUrl(@"url")))
+      resp(Http200, [("Content-Type","text/plain")], await loadUrl(decodeUrl(@"url")))
 
   get "/ix/@ixid":
-      resp(Http200, loadIx(@"ixid"))
+      resp(Http200, await loadIx(@"ixid"))
 
   post "/ix":
     var parsedRequest: ParsedRequest
