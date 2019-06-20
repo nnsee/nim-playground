@@ -93,7 +93,7 @@ proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig):
 
 routes:
   get "/":
-    redirect("/index.html")
+    resp readFile("public/index.html")
 
   get "/tour/@url":
       resp(Http200, [("Content-Type","text/plain")], await loadUrl(decodeUrl(@"url")))
