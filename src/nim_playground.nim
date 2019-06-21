@@ -92,6 +92,9 @@ proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig):
   return respondOnReady(fv, requestConfig)
 
 routes:
+  get "/index.html#@extra":
+    redirect "/#" & @"extra"
+
   get "/index.html":
     redirect "/"
 
