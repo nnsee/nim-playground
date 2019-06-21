@@ -92,6 +92,9 @@ proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig):
   return respondOnReady(fv, requestConfig)
 
 routes:
+  get "/index.html":
+    redirect "/"
+
   get "/":
     resp readFile("public/index.html")
 
