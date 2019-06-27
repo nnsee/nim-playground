@@ -67,7 +67,7 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
   echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
   execProcess("""
-    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine_test /usercode/script.sh in.nim $2
+    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine /usercode/script.sh in.nim $2
     """ % [requestConfig.tmpDir, compilationTarget])
 
 proc loadUrl(url: string): Future[string] {.async.} =
