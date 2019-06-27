@@ -52,6 +52,7 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
 
       errorsFile.close()
       logFile.close()
+      discard execProcess("sudo -u nobody /bin/chmod a+w $1/*" % [requestConfig.tmpDir])
       removeDir(requestConfig.tmpDir)
       freeShared(requestConfig)
       return $ret
@@ -63,9 +64,10 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
   discard existsOrCreateDir(requestConfig.tmpDir)
   copyFileWithPermissions("./test/script.sh", "$1/script.sh" % requestConfig.tmpDir)
   writeFile("$1/in.nim" % requestConfig.tmpDir, code)
+  echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
   execProcess("""
-    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode virtual_machine /usercode/script.sh in.nim $2
+    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine_test /usercode/script.sh in.nim $2
     """ % [requestConfig.tmpDir, compilationTarget])
 
 proc loadUrl(url: string): Future[string] {.async.} =
