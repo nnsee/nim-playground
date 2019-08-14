@@ -1,4 +1,5 @@
 import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams, uri
+import ansitohtml
 
 type
   Config = object
@@ -47,6 +48,11 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
+      template cleanAndColourize(x: var string) =
+        x = x.multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")]).ansiToHtml
+
+      cleanAndColourize(log)
+      cleanAndColourize(errors)
 
       var ret = %* {"compileLog": errors, "log": log}
 
