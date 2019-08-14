@@ -49,7 +49,9 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
       template cleanAndColourize(x: var string) =
-        x = x.multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")]).ansiToHtml
+        x = x
+          .multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")])
+          .ansiToHtml({"31": "color: red", "32": "#66d9ef", "36": "#50fa7b"}.toTable)
 
       cleanAndColourize(log)
       cleanAndColourize(errors)
