@@ -51,7 +51,7 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       template cleanAndColourize(x: var string) =
         x = x
           .multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")])
-          .ansiToHtml({"31": "color: red", "32": "#66d9ef", "36": "#50fa7b"}.toTable)
+          .ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
 
       cleanAndColourize(log)
       cleanAndColourize(errors)
