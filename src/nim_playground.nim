@@ -1,5 +1,5 @@
 import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams, uri
-import ansitohtml
+import ansitohtml, ansiparse, sequtils
 
 type
   Config = object
@@ -15,6 +15,9 @@ type
 
   RequestConfig = object
     tmpDir: string
+
+  OutputFormat = enum
+    Raw, HTML, Ansi, AnsiParsed
 
 const configFileName = "conf.json"
 
@@ -39,7 +42,10 @@ conf.logFile = logFile.addr
 let fl = newFileLogger(conf.logFile[], fmtStr = "$datetime $levelname ")
 fl.addHandler
 
-proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig): Future[string] {.async.} =
+proc `%`(c: char): JsonNode =
+  %($c)
+
+proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig, output: OutputFormat): Future[string] {.async.} =
   while true:
     if fv.isReady:
       echo ^fv
@@ -48,15 +54,30 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
-      template cleanAndColourize(x: var string) =
-        x = x
+
+      template cleanAndColourize(x: string): string =
+        x
           .multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")])
           .ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
 
-      cleanAndColourize(log)
-      cleanAndColourize(errors)
+      template clearAnsi(y: string): string =
+        y.parseAnsi
+          .filter(proc (x: AnsiData): bool = x.kind == String)
+          .map(proc (x: AnsiData): string = x.str)
+          .join()
 
-      var ret = %* {"compileLog": errors, "log": log}
+      var ret: JsonNode
+
+      case output:
+      of HTML:
+        ret = %* {"compileLog": cleanAndColourize(errors),
+                  "log": cleanAndColourize(log)}
+      of Ansi:
+        ret = %* {"compileLog": errors, "log": log}
+      of AnsiParsed:
+        ret = %* {"compileLog": errors.parseAnsi, "log": log.parseAnsi}
+      of Raw:
+        ret = %* {"compileLog": errors.clearAnsi, "log": log.clearAnsi}
 
       errorsFile.close()
       logFile.close()
@@ -97,9 +118,9 @@ proc loadIx(ixid: string): Future[string] {.async.} =
   except:
     return "Unable to load ix paste, file too large, or download is too slow"
 
-proc compile(code, compilationTarget: string, requestConfig: ptr RequestConfig): Future[string] =
+proc compile(code, compilationTarget: string, output: OutputFormat, requestConfig: ptr RequestConfig): Future[string] =
   let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig)
-  return respondOnReady(fv, requestConfig)
+  return respondOnReady(fv, requestConfig, output)
 
 routes:
   get "/index.html#@extra":
@@ -129,11 +150,17 @@ routes:
   post "/compile":
     var parsedRequest: ParsedRequest
 
+    var outputFormat = Raw
     if request.params.len > 0:
       if request.params.hasKey("code"):
         parsedRequest.code = request.params["code"]
       if request.params.hasKey("compilationTarget"):
         parsedRequest.compilationTarget = request.params["compilationTarget"]
+      if request.params.hasKey("outputFormat"):
+        try:
+          outputFormat = parseEnum[OutputFormat](request.params["outputFormat"])
+        except:
+          resp(Http400)
     else:
       let parsed = parseJson(request.body)
       if getOrDefault(parsed, "code").isNil:
@@ -141,10 +168,15 @@ routes:
       if getOrDefault(parsed, "compilationTarget").isNil:
         resp(Http400)
       parsedRequest = to(parsed, ParsedRequest)
+      if parsed.hasKey("outputFormat"):
+        try:
+          outputFormat = parseEnum[OutputFormat](parsed["outputFormat"].str)
+        except:
+          resp(Http400)
 
     let requestConfig = createShared(RequestConfig)
     requestConfig.tmpDir = conf.tmpDir[] & "/" & generateUUID()
-    let compileResult = await compile(parsedRequest.code, parsedRequest.compilationTarget, requestConfig)
+    let compileResult = await compile(parsedRequest.code, parsedRequest.compilationTarget, outputFormat, requestConfig)
 
     resp(Http200, [("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], compileResult)
 
