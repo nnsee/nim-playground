@@ -8,4 +8,5 @@ license       = "MIT"
 # Dependencies
 
 requires "termstyle"
-requires "nimpy"
+# Something in the way the nible packages are handled makes nimpy fail
+#requires "nimpy"
