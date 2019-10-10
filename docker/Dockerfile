@@ -44,7 +44,7 @@ ENV PATH=$PATH:/installer/nim/bin
 
 COPY packages.nimble ./
 
-RUN nimble install -y --depsOnly
+RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly
 
 ##################################
 
@@ -56,7 +56,7 @@ WORKDIR /playground
 
 COPY --from=builder /build/result/* ./nim/
 
-COPY --from=installer /root/.nimble/pkgs/* ./nimble/
+COPY --from=installer /installer/nimble/pkgs ./nimble
 
 ENV PATH=$PATH:/playground/nim/bin
 
