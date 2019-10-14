@@ -50,7 +50,7 @@ RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly
 
 FROM alpine:3.7 as playground
 
-RUN apk add gcc musl-dev
+RUN apk add gcc g++ musl-dev
 
 WORKDIR /playground
 
