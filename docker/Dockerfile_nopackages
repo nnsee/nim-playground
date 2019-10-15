@@ -18,7 +18,7 @@ WORKDIR /build/Nim/csources
 
 COPY curtag .
 
-RUN git checkout $(cat curtag) || git checkout $(echo $(git tag) $(cat curtag) | sed 's/ /\n/g' | sed 's/v/0./' | sort -i -t. -n -k1,1 -k2,2 -k3,3 -k4,4 | sed 's/0./v/' | sed -n "/$(cat curtag)/q;p" | tail -n1)
+RUN git checkout $(cat curtag) || git checkout $(echo $(git tag) $(cat curtag) | sed 's/ /\n/g' | sed 's/v/0./' | sort -t. -n -k1,1 -k2,2 -k3,3 -k4,4 | sed 's/0./v/' | sed -n "/$(cat curtag)/q;p" | tail -n1)
 
 RUN sh build.sh
 
