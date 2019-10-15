@@ -89,15 +89,17 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
 
     await sleepAsync(500)
 
-proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr RequestConfig): TaintedString =
+proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr RequestConfig, version: string): TaintedString =
   discard existsOrCreateDir(requestConfig.tmpDir)
   copyFileWithPermissions("./test/script.sh", "$1/script.sh" % requestConfig.tmpDir)
   writeFile("$1/in.nim" % requestConfig.tmpDir, code)
   echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
-  execProcess("""
-    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine /usercode/script.sh in.nim $2
-    """ % [requestConfig.tmpDir, compilationTarget])
+  let cmd = ("""
+    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:""" & version & """ /usercode/script.sh in.nim $2
+    """) % [requestConfig.tmpDir, compilationTarget]
+
+  execProcess(cmd)
 
 proc loadUrl(url: string): Future[string] {.async.} =
   let client = newAsyncHttpClient()
@@ -118,9 +120,20 @@ proc loadIx(ixid: string): Future[string] {.async.} =
   except:
     return "Unable to load ix paste, file too large, or download is too slow"
 
-proc compile(code, compilationTarget: string, output: OutputFormat, requestConfig: ptr RequestConfig): Future[string] =
-  let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig)
+proc compile(code, compilationTarget: string, output: OutputFormat, requestConfig: ptr RequestConfig, version: string): Future[string] =
+  let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig, version)
   return respondOnReady(fv, requestConfig, output)
+
+proc isVersion(ver: string): bool =
+  let parts = ver.split('.')
+  if parts.len != 3:
+    return false
+  if parts[0][0] != 'v':
+    return false
+  else:
+    if not parts[0][1..^1].isDigit or not parts[1].isDigit or not parts[2].isDigit:
+      return false
+  return ver in execProcess("docker images | sed -n 's/virtual_machine *\\(v[^ ]*\\).*/\\1/p' | sort --version-sort").split("\n")[0..^2]
 
 routes:
   get "/index.html#@extra":
@@ -131,6 +144,9 @@ routes:
 
   get "/":
     resp readFile("public/index.html")
+
+  get "/versions":
+    resp $(%*{"versions": execProcess("docker images | sed -n 's/virtual_machine *\\(v[^ ]*\\).*/\\1/p' | sort --version-sort").split("\n")[0..^2]})
 
   get "/tour/@url":
       resp(Http200, [("Content-Type","text/plain")], await loadUrl(decodeUrl(@"url")))
@@ -150,7 +166,9 @@ routes:
   post "/compile":
     var parsedRequest: ParsedRequest
 
-    var outputFormat = Raw
+    var
+      outputFormat = Raw
+      version = "latest"
     if request.params.len > 0:
       if request.params.hasKey("code"):
         parsedRequest.code = request.params["code"]
@@ -161,22 +179,29 @@ routes:
           outputFormat = parseEnum[OutputFormat](request.params["outputFormat"])
         except:
           resp(Http400)
+      if request.params.hasKey("version"):
+        version = request.params["version"]
     else:
       let parsed = parseJson(request.body)
       if getOrDefault(parsed, "code").isNil:
-        resp(Http400)
+        resp(Http400, "{\"error\":\"No code\"")
       if getOrDefault(parsed, "compilationTarget").isNil:
-        resp(Http400)
+        resp(Http400, "{\"error\":\"No compilation target\"}")
       parsedRequest = to(parsed, ParsedRequest)
       if parsed.hasKey("outputFormat"):
         try:
           outputFormat = parseEnum[OutputFormat](parsed["outputFormat"].str)
         except:
-          resp(Http400)
+          resp(Http400, "{\"error\":\"Invalid output format\"")
+      if parsed.hasKey("version"):
+        version = parsed["version"].str
+
+    if version != "latest" and not version.isVersion:
+      resp(Http400, "{\"error\":\"Unknown version\"}")
 
     let requestConfig = createShared(RequestConfig)
     requestConfig.tmpDir = conf.tmpDir[] & "/" & generateUUID()
-    let compileResult = await compile(parsedRequest.code, parsedRequest.compilationTarget, outputFormat, requestConfig)
+    let compileResult = await compile(parsedRequest.code, parsedRequest.compilationTarget, outputFormat, requestConfig, version)
 
     resp(Http200, [("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], compileResult)
 
