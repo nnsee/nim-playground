@@ -38,6 +38,8 @@ FROM alpine:3.7 as playground
 
 RUN apk add gcc g++ musl-dev
 
+RUN apk add pcre # Requirement for regex
+
 WORKDIR /playground
 
 COPY --from=builder /build/result/* ./nim/

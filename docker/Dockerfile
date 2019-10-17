@@ -58,7 +58,7 @@ FROM alpine:3.7 as playground
 
 RUN apk add gcc g++ musl-dev
 
-RUN apk add lapack-dev # Requirement for arraymancer
+RUN apk add lapack # Requirement for arraymancer
 
 RUN apk add pcre # Requirement for regex
 
