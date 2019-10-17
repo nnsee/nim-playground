@@ -95,9 +95,9 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
   writeFile("$1/in.nim" % requestConfig.tmpDir, code)
   echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
-  let cmd = ("""
-    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:""" & version & """ /usercode/script.sh in.nim $2
-    """) % [requestConfig.tmpDir, compilationTarget]
+  let cmd = """
+    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:$2 /usercode/script.sh in.nim $3
+    """ % [requestConfig.tmpDir, version, compilationTarget]
 
   execProcess(cmd)
 
