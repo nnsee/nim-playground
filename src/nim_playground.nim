@@ -17,7 +17,7 @@ type
     tmpDir: string
 
   OutputFormat = enum
-    Raw, HTML, Ansi, AnsiParsed
+    Raw = "raw", HTML = "html", Ansi = "ansi", AnsiParsed = "ansiparsed"
 
 const configFileName = "conf.json"
 
@@ -48,12 +48,17 @@ proc `%`(c: char): JsonNode =
 proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig, output: OutputFormat): Future[string] {.async.} =
   while true:
     if fv.isReady:
-      echo ^fv
-
       var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
       var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
       var errors = await errorsFile.readAll()
       var log = await logFile.readAll()
+      let truncMsg = "\e[0m\n\nOutput truncated"
+      if errors.len > 2048:
+        errors.setLen(2048 + truncMsg.len)
+        errors[2048..^1] = truncMsg
+      if log.len > 2048:
+        log.setLen(2048 + truncMsg.len)
+        log[2048..^1] = truncMsg
 
       template cleanAndColourize(x: string): string =
         x
@@ -81,13 +86,13 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
 
       errorsFile.close()
       logFile.close()
-      discard execProcess("sudo -u nobody /bin/chmod a+w $1/*" % [requestConfig.tmpDir])
-      removeDir(requestConfig.tmpDir)
+      #discard execProcess("sudo -u nobody /bin/chmod a+w $1/*" % [requestConfig.tmpDir])
+      #removeDir(requestConfig.tmpDir)
       freeShared(requestConfig)
       return $ret
 
 
-    await sleepAsync(500)
+    await sleepAsync(100)
 
 proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr RequestConfig, version: string): TaintedString =
   discard existsOrCreateDir(requestConfig.tmpDir)
@@ -96,7 +101,7 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
   echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
   let cmd = """
-    ./docker_timeout.sh 20s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:$2 /usercode/script.sh in.nim $3
+    ./docker_timeout.sh 15s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:$2 /usercode/script.sh in.nim $3
     """ % [requestConfig.tmpDir, version, compilationTarget]
 
   execProcess(cmd)
@@ -123,6 +128,8 @@ proc loadIx(ixid: string): Future[string] {.async.} =
 proc compile(code, compilationTarget: string, output: OutputFormat, requestConfig: ptr RequestConfig, version: string): Future[string] =
   let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig, version)
   return respondOnReady(fv, requestConfig, output)
+
+proc isDigit(x: string): bool = x.allCharsInSet(Digits)
 
 proc isVersion(ver: string): bool =
   let parts = ver.split('.')

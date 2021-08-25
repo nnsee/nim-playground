@@ -8,7 +8,7 @@ RUN git clone https://github.com/nim-lang/Nim.git
 
 COPY curtag Nim
 
-RUN cd Nim && git checkout $(cat curtag)
+RUN cd Nim && git checkout -f $(cat curtag)
 
 WORKDIR /build/Nim
 
@@ -18,7 +18,7 @@ WORKDIR /build/Nim/csources
 
 COPY curtag .
 
-RUN git checkout $(cat curtag) || git checkout $(echo $(git tag) $(cat curtag) | sed 's/ /\n/g' | sed 's/v/0./' | sort -t. -n -k1,1 -k2,2 -k3,3 -k4,4 | sed 's/0./v/' | sed -n "/$(cat curtag)/q;p" | tail -n1)
+RUN git checkout -f $(cat curtag) || git checkout -f $(echo $(git tag) $(cat curtag) | sed 's/ /\n/g' | sed 's/v/0./' | sort -t. -n -k1,1 -k2,2 -k3,3 -k4,4 | sed 's/0./v/' | sed -n "/$(cat curtag)/q;p" | tail -n1)
 
 RUN sh build.sh
 
@@ -50,7 +50,7 @@ ENV PATH=$PATH:/installer/nim/bin
 
 COPY packages.nimble ./
 
-RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly
+RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly --verbose
 
 ##################################
 
