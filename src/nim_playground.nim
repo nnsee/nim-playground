@@ -48,17 +48,29 @@ proc `%`(c: char): JsonNode =
 proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig, output: OutputFormat): Future[string] {.async.} =
   while true:
     if fv.isReady:
-      var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
-      var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
-      var errors = await errorsFile.readAll()
-      var log = await logFile.readAll()
-      let truncMsg = "\e[0m\n\nOutput truncated"
-      if errors.len > 2048:
-        errors.setLen(2048 + truncMsg.len)
-        errors[2048..^1] = truncMsg
-      if log.len > 2048:
-        log.setLen(2048 + truncMsg.len)
-        log[2048..^1] = truncMsg
+      info(^fv)
+      let
+        truncMsg = "\e[0m\n\nOutput truncated"
+        errors = try:
+          var
+            errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
+            errors = await errorsFile.readAll()
+          errorsFile.close()
+          if errors.len > 2048:
+            errors.setLen(2048 + truncMsg.len)
+            errors[2048..^1] = truncMsg
+          errors
+        except: "Unable to read error log"
+        log = try:
+          var
+            logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
+            log = await logFile.readAll()
+          logFile.close()
+          if log.len > 2048:
+            log.setLen(2048 + truncMsg.len)
+            log[2048..^1] = truncMsg
+          log
+        except: "Unable to read output log"
 
       template cleanAndColourize(x: string): string =
         x
@@ -84,10 +96,8 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       of Raw:
         ret = %* {"compileLog": errors.clearAnsi, "log": log.clearAnsi}
 
-      errorsFile.close()
-      logFile.close()
-      #discard execProcess("sudo -u nobody /bin/chmod a+w $1/*" % [requestConfig.tmpDir])
-      #removeDir(requestConfig.tmpDir)
+      discard execProcess("sudo -u nobody /bin/chmod a+w $1/*" % [requestConfig.tmpDir])
+      removeDir(requestConfig.tmpDir)
       freeShared(requestConfig)
       return $ret
 
@@ -95,16 +105,20 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
     await sleepAsync(100)
 
 proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr RequestConfig, version: string): TaintedString =
-  discard existsOrCreateDir(requestConfig.tmpDir)
-  copyFileWithPermissions("./test/script.sh", "$1/script.sh" % requestConfig.tmpDir)
-  writeFile("$1/in.nim" % requestConfig.tmpDir, code)
-  echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
+  try:
+    discard existsOrCreateDir(requestConfig.tmpDir)
+    copyFileWithPermissions("./test/script.sh", "$1/script.sh" % requestConfig.tmpDir)
+    writeFile("$1/in.nim" % requestConfig.tmpDir, code)
+    echo execProcess("chmod a+w $1" % [requestConfig.tmpDir])
 
-  let cmd = """
-    ./docker_timeout.sh 15s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:$2 /usercode/script.sh in.nim $3
-    """ % [requestConfig.tmpDir, version, compilationTarget]
+    let cmd = """
+      ./docker_timeout.sh 15s -i -t --net=none -v "$1":/usercode --user nobody virtual_machine:$2 /usercode/script.sh in.nim $3
+      """ % [requestConfig.tmpDir, version, compilationTarget]
 
-  execProcess(cmd)
+    execProcess(cmd)
+  except:
+    error(getCurrentExceptionMsg())
+    "".TaintedString
 
 proc loadUrl(url: string): Future[string] {.async.} =
   let client = newAsyncHttpClient()
