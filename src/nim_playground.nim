@@ -52,25 +52,27 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
       let
         truncMsg = "\e[0m\n\nOutput truncated"
         errors = try:
-          var
-            errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
-            errors = await errorsFile.readAll()
-          errorsFile.close()
-          if errors.len > 2048:
-            errors.setLen(2048 + truncMsg.len)
-            errors[2048..^1] = truncMsg
-          errors
-        except: "Unable to read error log"
+          var errorsFile = openAsync("$1/errors.txt" % requestConfig.tmpDir, fmRead)
+          try:
+            var errors = await errorsFile.read(2048 + truncMsg.len)
+            if errors.len > 2048:
+              errors.setLen(2048 + truncMsg.len)
+              errors[2048..^1] = truncMsg
+            errors
+          except: "Unable to read error log"
+          finally: errorsFile.close()
+        except: "Unable to open error log"
         log = try:
-          var
-            logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
-            log = await logFile.readAll()
-          logFile.close()
-          if log.len > 2048:
-            log.setLen(2048 + truncMsg.len)
-            log[2048..^1] = truncMsg
-          log
-        except: "Unable to read output log"
+          var logFile = openAsync("$1/logfile.txt" % requestConfig.tmpDir, fmRead)
+          try:
+            var log = await logFile.read(2048 + truncMsg.len)
+            if log.len > 2048:
+              log.setLen(2048 + truncMsg.len)
+              log[2048..^1] = truncMsg
+            log
+          except: "Unable to read output log"
+          finally: logFile.close()
+        except: "Unable to open output log"
 
       template cleanAndColourize(x: string): string =
         x
