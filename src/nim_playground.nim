@@ -130,10 +130,13 @@ proc loadUrl(url: string): Future[string] {.async.} =
   return await client.getContent(url)
 
 proc createIx(code: string): string =
-  let client = newHttpClient()
-  var data = newMultipartData()
-  data["f:1"] = code
-  client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
+  try:
+    let client = newHttpClient()
+    var data = newMultipartData()
+    data["f:1"] = code
+    client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
+  except:
+    "Something went wrong while uploading, please try again"
 
 proc loadIx(ixid: string): Future[string] {.async.} =
   try:
