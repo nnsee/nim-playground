@@ -202,7 +202,7 @@ routes:
         parsedRequest.compilationTarget = request.params["compilationTarget"]
       if request.params.hasKey("outputFormat"):
         try:
-          outputFormat = parseEnum[OutputFormat](request.params["outputFormat"])
+          outputFormat = parseEnum[OutputFormat](request.params["outputFormat"].toLowerAscii)
         except:
           resp(Http400)
       if request.params.hasKey("version"):
