@@ -28,3 +28,4 @@ rm "$location/curtag"
 
 docker tag virtual_machine:$(docker images | sed -n 's/virtual_machine *\(v[^ ]*\).*/\1/p' | sort --version-sort | tail -n1) virtual_machine:latest
 docker system prune -f --volumes
+docker container prune -f

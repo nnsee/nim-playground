@@ -4,7 +4,7 @@ set -e
 to=$1
 shift
 
-cont=$(docker run --memory=200m --cpus=".8" -d "$@")
+cont=$(docker run --memory=100m --memory-swap=100m --cpus=".8" -d "$@")
 code=$(timeout "$to" docker wait "$cont" || true)
 docker kill $cont &> /dev/null
 echo -n 'status: '

@@ -12,9 +12,9 @@ RUN cd Nim && git checkout -f $(cat curtag)
 
 WORKDIR /build/Nim
 
-RUN git clone https://github.com/nim-lang/csources.git
+RUN git clone https://github.com/nim-lang/csources_v1.git
 
-WORKDIR /build/Nim/csources
+WORKDIR /build/Nim/csources_v1
 
 COPY curtag .
 

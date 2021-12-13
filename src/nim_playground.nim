@@ -216,9 +216,9 @@ routes:
       parsedRequest = to(parsed, ParsedRequest)
       if parsed.hasKey("outputFormat"):
         try:
-          outputFormat = parseEnum[OutputFormat](parsed["outputFormat"].str)
+          outputFormat = parseEnum[OutputFormat](parsed["outputFormat"].str.toLowerAscii)
         except:
-          resp(Http400, "{\"error\":\"Invalid output format\"")
+          resp(Http400, "{\"error\":\"Invalid output format\"}")
       if parsed.hasKey("version"):
         version = parsed["version"].str
 
