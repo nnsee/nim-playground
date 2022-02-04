@@ -210,7 +210,7 @@ routes:
     else:
       let parsed = parseJson(request.body)
       if getOrDefault(parsed, "code").isNil:
-        resp(Http400, "{\"error\":\"No code\"")
+        resp(Http400, "{\"error\":\"No code\"}")
       if getOrDefault(parsed, "compilationTarget").isNil:
         resp(Http400, "{\"error\":\"No compilation target\"}")
       parsedRequest = to(parsed, ParsedRequest)
@@ -224,6 +224,9 @@ routes:
 
     if version != "latest" and not version.isVersion:
       resp(Http400, "{\"error\":\"Unknown version\"}")
+
+    if parsedRequest.compilationTarget notin ["c", "cpp"]:
+      resp(Http400, "{\"error\":\"Unknown compilation target\"}")
 
     let requestConfig = createShared(RequestConfig)
     requestConfig.tmpDir = conf.tmpDir[] & "/" & generateUUID()
