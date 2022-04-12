@@ -1,5 +1,5 @@
 import jester, asyncdispatch, os, osproc, strutils, json, threadpool, asyncfile, asyncnet, posix, logging, nuuid, tables, httpclient, streams, uri
-import ansitohtml, ansiparse, sequtils
+import ansitohtml, ansiparse, sequtils, options
 
 type
   Config = object
@@ -134,9 +134,9 @@ proc createIx(code: string): string =
     let client = newHttpClient()
     var data = newMultipartData()
     data["f:1"] = code
-    client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim"
+    some(client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim")
   except:
-    "Something went wrong while uploading, please try again"
+    none(string)
 
 proc loadIx(ixid: string): Future[string] {.async.} =
   try:
@@ -187,7 +187,12 @@ routes:
       resp(Http400)
     parsedRequest = to(parsed, ParsedRequest)
 
-    resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], createix(parsedRequest.code))
+    let ixUrl = createix(parsedRequest.code)
+
+    if isUrl.isSome:
+      resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], ixUrl.get)
+    else:
+      resp(Http500)
 
   post "/compile":
     var parsedRequest: ParsedRequest
