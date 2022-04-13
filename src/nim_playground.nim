@@ -192,7 +192,7 @@ routes:
     if isUrl.isSome:
       resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], ixUrl.get)
     else:
-      resp(Http500)
+      resp(Http500, "Something went wrong while uploading, please try again")
 
   post "/compile":
     var parsedRequest: ParsedRequest
