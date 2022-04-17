@@ -129,7 +129,7 @@ proc loadUrl(url: string): Future[string] {.async.} =
       client.close()
   return await client.getContent(url)
 
-proc createIx(code: string): string =
+proc createIx(code: string): Option[string] =
   try:
     let client = newHttpClient()
     var data = newMultipartData()
