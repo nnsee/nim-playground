@@ -189,7 +189,7 @@ routes:
 
     let ixUrl = createix(parsedRequest.code)
 
-    if isUrl.isSome:
+    if ixUrl.isSome:
       resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], ixUrl.get)
     else:
       resp(Http500, "Something went wrong while uploading, please try again")
