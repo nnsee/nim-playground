@@ -1,4 +1,4 @@
-FROM alpine:3.7 as builder
+FROM alpine:3.17 as builder
 
 RUN apk add git gcc musl-dev
 
@@ -36,7 +36,7 @@ RUN ./koch nimble
 
 ##################################
 
-FROM alpine:3.7 as installer
+FROM alpine:3.17 as installer
 
 RUN apk add git gcc musl-dev libressl-dev
 
@@ -54,7 +54,7 @@ RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly --verbose
 
 ##################################
 
-FROM alpine:3.7 as playground
+FROM alpine:3.17 as playground
 
 RUN apk add gcc g++ musl-dev
 

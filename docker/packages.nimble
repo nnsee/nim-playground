@@ -28,7 +28,6 @@ requires "criterion"
 requires "dashing"
 requires "docopt"
 requires "elvis"
-requires "fragments"
 requires "gara"
 # requires "glob" # Version pinned to 0.17.x: https://github.com/citycide/glob/issues/55
 requires "gnuplot"

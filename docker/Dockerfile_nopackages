@@ -1,4 +1,4 @@
-FROM alpine:3.7 as builder
+FROM alpine:3.17 as builder
 
 RUN apk add git gcc musl-dev
 
@@ -12,9 +12,9 @@ RUN cd Nim && git checkout $(cat curtag)
 
 WORKDIR /build/Nim
 
-RUN git clone https://github.com/nim-lang/csources.git
+RUN git clone https://github.com/nim-lang/csources_v1.git
 
-WORKDIR /build/Nim/csources
+WORKDIR /build/Nim/csources_v1
 
 COPY curtag .
 
@@ -34,7 +34,7 @@ RUN ./koch install /build/result
 
 ##################################
 
-FROM alpine:3.7 as playground
+FROM alpine:3.17 as playground
 
 RUN apk add gcc g++ musl-dev
 
