@@ -74,13 +74,23 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
           finally: logFile.close()
         except: "Unable to open output log"
 
-      template cleanAndColourize(x: string): string =
-        x
-          .multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")])
-          .ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
+      proc cleanAndColourize(x: string): string =
+        result = x.multiReplace([("<", "&lt;"), (">", "&gt;"), ("\n", "<br/>")])
+        while true:
+          try:
+            result = result.ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
+          except FinalByteError:
+            result.setLen(result.rfind("\e"))
 
-      template clearAnsi(y: string): string =
-        y.parseAnsi
+      proc clearAnsi(y: string): string =
+        result = y
+        var ansiData: seq[AnsiData]
+        while true:
+          try:
+             ansiData = result.parseAnsi
+          except FinalByteError:
+            result.setLen(result.rfind("\e"))
+        result = ansiData
           .filter(proc (x: AnsiData): bool = x.kind == String)
           .map(proc (x: AnsiData): string = x.str)
           .join()
