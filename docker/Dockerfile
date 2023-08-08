@@ -12,9 +12,12 @@ RUN cd Nim && git checkout -f $(cat curtag)
 
 WORKDIR /build/Nim
 
-RUN git clone https://github.com/nim-lang/csources_v1.git
+RUN git clone "https://github.com/nim-lang/csources_$(cat curtag | head -c 2).git" csources
 
-WORKDIR /build/Nim/csources_v1
+WORKDIR /build/Nim/csources
+
+RUN ls
+RUN pwd
 
 COPY curtag .
 
@@ -50,6 +53,8 @@ ENV PATH=$PATH:/installer/nim/bin
 
 COPY packages.nimble ./
 
+RUN nimble --version
+
 RUN nimble install --nimbleDir:/installer/nimble -y --depsOnly --verbose
 
 ##################################
@@ -66,7 +71,7 @@ WORKDIR /playground
 
 COPY --from=builder /build/result/* ./nim/
 
-COPY --from=installer /installer/nimble/pkgs ./nimble
+COPY --from=installer /installer/nimble/pkgs* ./nimble
 
 ENV PATH=$PATH:/playground/nim/bin
 

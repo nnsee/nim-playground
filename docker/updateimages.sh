@@ -16,7 +16,7 @@ while read -r line; do
     echo $line > "$location/curtag"
     cat "$location/curtag"
     if [ "$line" == "$latest" ]; then
-      docker build --no-cache -t "virtual_machine:$line" "$location"
+      docker build --progress=plain --no-cache -t "virtual_machine:$line" "$location"
     else
       docker build --no-cache -t "virtual_machine:$line" -f "$location/Dockerfile_nopackages" "$location"
     fi
