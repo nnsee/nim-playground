@@ -80,7 +80,7 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
           try:
             result = result.ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
             break
-          except FinalByteError:
+          except FinalByteError, InsufficientInputError:
             result.setLen(result.rfind("\e") - 1)
 
       proc clearAnsi(y: string): string =
@@ -90,7 +90,7 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
           try:
             ansiData = result.parseAnsi
             break
-          except FinalByteError:
+          except FinalByteError, InsufficientInputError:
             result.setLen(result.rfind("\e") - 1)
         result = ansiData
           .filter(proc (x: AnsiData): bool = x.kind == String)
