@@ -79,8 +79,9 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
         while true:
           try:
             result = result.ansiToHtml({"31": "color: red", "32": "color: #66d9ef", "36": "color: #50fa7b"}.toTable)
+             break
           except FinalByteError:
-            result.setLen(result.rfind("\e"))
+            result.setLen(result.rfind("\e") - 1)
 
       proc clearAnsi(y: string): string =
         result = y
@@ -88,8 +89,9 @@ proc respondOnReady(fv: FlowVar[TaintedString], requestConfig: ptr RequestConfig
         while true:
           try:
              ansiData = result.parseAnsi
+             break
           except FinalByteError:
-            result.setLen(result.rfind("\e"))
+            result.setLen(result.rfind("\e") - 1)
         result = ansiData
           .filter(proc (x: AnsiData): bool = x.kind == String)
           .map(proc (x: AnsiData): string = x.str)
