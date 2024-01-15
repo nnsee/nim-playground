@@ -136,25 +136,33 @@ proc prepareAndCompile(code, compilationTarget: string, requestConfig: ptr Reque
 
 proc loadUrl(url: string): Future[string] {.async.} =
   let client = newAsyncHttpClient()
-  client.onProgressChanged = proc (total, progress, speed: BiggestInt) {.async.} =
-    if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
-      client.close()
-  return await client.getContent(url)
-
-proc createIx(code: string): Option[string] =
   try:
-    let client = newHttpClient()
-    var data = newMultipartData()
-    data["f:1"] = code
-    some(client.postContent("http://ix.io", multipart = data)[0..^2] & "/nim")
+    client.onProgressChanged = proc (total, progress, speed: BiggestInt) {.async.} =
+      if total > 1048576 or progress > 1048576 or (progress > 4000 and speed < 100):
+        client.close()
+    return await client.getContent(url)
+  finally:
+    client.close()
+
+proc createPaste(code: string): Future[Option[string]] {.async.} =
+  var client: AsyncHttpClient
+  try:
+    client = newAsyncHttpClient()
+    let response = await client.postContent("https://pasty.ee", code)
+    if response.startsWith("URL: "):
+      some(response[5..<response.find("\n")])
+    else:
+      none(string)
   except:
     none(string)
+  finally:
+    client.close()
 
-proc loadIx(ixid: string): Future[string] {.async.} =
+proc loadPaste(id: string): Future[string] {.async.} =
   try:
-    return await loadUrl("http://ix.io/$1" % ixid)
+    return await loadUrl("https://pasty.ee/$1" % id)
   except:
-    return "Unable to load ix paste, file too large, or download is too slow"
+    return "Unable to load pasty.ee paste, file too large, or download is too slow"
 
 proc compile(code, compilationTarget: string, output: OutputFormat, requestConfig: ptr RequestConfig, version: string): Future[string] =
   let fv = spawn prepareAndCompile(code, compilationTarget, requestConfig, version)
@@ -190,7 +198,7 @@ routes:
       resp(Http200, [("Content-Type","text/plain")], await loadUrl(decodeUrl(@"url")))
 
   get "/ix/@ixid":
-      resp(Http200, await loadIx(@"ixid"))
+      resp(Http200, await loadPaste(@"ixid"))
 
   post "/ix":
     var parsedRequest: ParsedRequest
@@ -199,7 +207,7 @@ routes:
       resp(Http400)
     parsedRequest = to(parsed, ParsedRequest)
 
-    let ixUrl = createix(parsedRequest.code)
+    let ixUrl = await createPaste(parsedRequest.code)
 
     if ixUrl.isSome:
       resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], ixUrl.get)
