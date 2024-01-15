@@ -165,12 +165,16 @@ proc loadIx(ixid: string): Future[string] {.async.} =
 proc createPasty(code: string): Future[Option[string]] {.async.} =
   var client: AsyncHttpClient
   try:
-    client = newAsyncHttpClient()
-    let response = await client.postContent("https://pasty.ee", code)
-    if response.startsWith("URL: "):
-      some(response[5..<response.find("\n")])
-    else:
+    let headers = newHttpHeaders(@[("Accept", "application/json"), ("Origin", "https://play.nim-lang.org")])
+    client = newAsyncHttpClient(headers = headers)
+    let
+      response = await client.postContent("https://pasty.ee", code)
+      parsed = parseJson(response)
+      url = getOrDefault(parsed, "url")
+    if url.isNil:
       none(string)
+    else:
+      some(getStr(url))
   except:
     none(string)
   finally:
