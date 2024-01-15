@@ -144,7 +144,25 @@ proc loadUrl(url: string): Future[string] {.async.} =
   finally:
     client.close()
 
-proc createPaste(code: string): Future[Option[string]] {.async.} =
+proc createIx(code: string): Future[Option[string]] {.async.} =
+  var client: AsyncHttpClient
+  try:
+    client = newAsyncHttpClient()
+    var data = newMultipartData()
+    data["f:1"] = code
+    some((await client.postContent("http://ix.io", multipart = data))[0..^2] & "/nim")
+  except:
+    none(string)
+  finally:
+    client.close()
+
+proc loadIx(ixid: string): Future[string] {.async.} =
+  try:
+    return await loadUrl("http://ix.io/$1" % ixid)
+  except:
+    return "Unable to load ix paste, file too large, or download is too slow"
+
+proc createPasty(code: string): Future[Option[string]] {.async.} =
   var client: AsyncHttpClient
   try:
     client = newAsyncHttpClient()
@@ -158,7 +176,7 @@ proc createPaste(code: string): Future[Option[string]] {.async.} =
   finally:
     client.close()
 
-proc loadPaste(id: string): Future[string] {.async.} =
+proc loadPasty(id: string): Future[string] {.async.} =
   try:
     return await loadUrl("https://pasty.ee/$1" % id)
   except:
@@ -198,7 +216,7 @@ routes:
       resp(Http200, [("Content-Type","text/plain")], await loadUrl(decodeUrl(@"url")))
 
   get "/ix/@ixid":
-      resp(Http200, await loadPaste(@"ixid"))
+      resp(Http200, await loadIx(@"ixid"))
 
   post "/ix":
     var parsedRequest: ParsedRequest
@@ -207,10 +225,27 @@ routes:
       resp(Http400)
     parsedRequest = to(parsed, ParsedRequest)
 
-    let ixUrl = await createPaste(parsedRequest.code)
+    let ixUrl = await createIx(parsedRequest.code)
 
     if ixUrl.isSome:
       resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], ixUrl.get)
+    else:
+      resp(Http500, "Something went wrong while uploading, please try again")
+
+  get "/pasty/@pastyid":
+      resp(Http200, await loadPasty(@"pastyid"))
+
+  post "/pasty":
+    var parsedRequest: ParsedRequest
+    let parsed = parseJson(request.body)
+    if getOrDefault(parsed, "code").isNil:
+      resp(Http400)
+    parsedRequest = to(parsed, ParsedRequest)
+
+    let pastyUrl = await createPasty(parsedRequest.code)
+
+    if pastyUrl.isSome:
+      resp(Http200, @[("Access-Control-Allow-Origin", "*"), ("Access-Control-Allow-Methods", "POST")], pastyUrl.get)
     else:
       resp(Http500, "Something went wrong while uploading, please try again")
 
